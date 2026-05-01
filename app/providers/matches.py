@@ -51,20 +51,22 @@ class OpenLigaDBMatchProvider:
                     continue
 
                 for item in payload:
-                    starts_at = self._parse_datetime(item.get("MatchDateTimeUTC"))
+                    starts_at = self._parse_datetime(
+                        item.get("matchDateTimeUTC") or item.get("matchDateTime")
+                    )
                     if starts_at is None or starts_at <= now:
                         continue
-                    team1 = (item.get("Team1") or {}).get("TeamName")
-                    team2 = (item.get("Team2") or {}).get("TeamName")
+                    team1 = (item.get("team1") or {}).get("teamName")
+                    team2 = (item.get("team2") or {}).get("teamName")
                     if not team1 or not team2:
                         continue
-                    provider_id = item.get("MatchID")
+                    provider_id = item.get("matchID")
                     if provider_id is None:
                         continue
                     matches.append(
                         Match(
                             provider_match_id=f"openligadb-{provider_id}",
-                            league=item.get("LeagueName") or league.upper(),
+                            league=item.get("leagueName") or league.upper(),
                             home_team=team1,
                             away_team=team2,
                             starts_at=starts_at,
