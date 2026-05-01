@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import and_, delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import MatchModel, MatchResultModel, PredictionModel
+from app.db.models import AppSettingModel, MatchModel, MatchResultModel, PredictionModel
 from app.domain.enums import HitMiss, PredictionStatus
 
 
@@ -237,3 +237,23 @@ class ResultRepository:
         self.session.add(result)
         await self.session.flush()
         return result
+
+
+class SettingsRepository:
+    def __init__(self, session: AsyncSession) -> None:
+        self.session = session
+
+    async def get(self, key: str) -> str | None:
+        row = await self.session.get(AppSettingModel, key)
+        if row is None:
+            return None
+        return row.value
+
+    async def set(self, key: str, value: str) -> None:
+        existing = await self.session.get(AppSettingModel, key)
+        if existing is None:
+            self.session.add(AppSettingModel(key=key, value=value))
+            await self.session.flush()
+            return
+        existing.value = value
+        existing.updated_at = datetime.utcnow()

@@ -33,7 +33,7 @@ async def build_app() -> tuple[Dispatcher, AsyncIOScheduler, Bot]:
 
     engine = build_engine(settings)
     session_factory = build_session_factory(engine)
-    custom_generation_prompt: str | None = None
+    prompt_key = "custom_generation_prompt"
 
     def build_llm_provider() -> LLMProvider:
         if settings.enable_openrouter_fallback and settings.openrouter_api_key:
@@ -41,6 +41,7 @@ async def build_app() -> tuple[Dispatcher, AsyncIOScheduler, Bot]:
                 api_key=settings.openrouter_api_key,
                 primary_model=settings.openrouter_model,
                 fallback_model=settings.openrouter_fallback_model,
+                enable_web_search=settings.openrouter_enable_web_search,
             )
         return GeminiProvider(settings)
 
@@ -50,16 +51,17 @@ async def build_app() -> tuple[Dispatcher, AsyncIOScheduler, Bot]:
         return MockMatchProvider()
 
     async def force_generate() -> int:
-        nonlocal custom_generation_prompt
         async with session_factory() as session:
-            from app.db.repositories import MatchRepository, PredictionRepository
+            from app.db.repositories import MatchRepository, PredictionRepository, SettingsRepository
 
+            settings_repo = SettingsRepository(session)
             service = PredictionGeneratorService(
                 match_provider=build_match_provider(),
                 llm_provider=build_llm_provider(),
                 match_repo=MatchRepository(session),
                 prediction_repo=PredictionRepository(session),
-                custom_prompt=custom_generation_prompt,
+                custom_prompt=await settings_repo.get(prompt_key),
+                strict_llm_only=settings.strict_llm_only,
             )
             generated = await service.generate_daily_drafts(1, force=True)
             await session.commit()
@@ -102,16 +104,49 @@ async def build_app() -> tuple[Dispatcher, AsyncIOScheduler, Bot]:
             return drafts + in_moderation + approved
 
     async def set_prompt(value: str | None) -> str:
-        nonlocal custom_generation_prompt
-        custom_generation_prompt = value.strip() if value and value.strip() else None
-        if custom_generation_prompt is None:
+        async with session_factory() as session:
+            from app.db.repositories import SettingsRepository
+
+            repo = SettingsRepository(session)
+            if value and value.strip():
+                await repo.set(prompt_key, value.strip())
+                await session.commit()
+                return "Кастомный промпт сохранен."
+            await repo.set(prompt_key, "")
+            await session.commit()
             return "Промпт сброшен на стандартный."
-        return "Кастомный промпт сохранен."
 
     async def get_prompt() -> str:
-        if custom_generation_prompt:
-            return f"Текущий кастомный промпт:\n\n{custom_generation_prompt}"
-        return "Используется стандартный промпт."
+        async with session_factory() as session:
+            from app.db.repositories import SettingsRepository
+
+            repo = SettingsRepository(session)
+            value = (await repo.get(prompt_key) or "").strip()
+            if value:
+                return f"Текущий кастомный промпт:\n\n{value}"
+            return "Используется стандартный промпт."
+
+    async def status_getter() -> str:
+        llm = build_llm_provider()
+        provider = "openrouter" if settings.enable_openrouter_fallback else "gemini"
+        model = settings.openrouter_model if provider == "openrouter" else settings.gemini_model
+        test_ok = False
+        try:
+            test_text = await llm.generate("Reply with exactly: OK")
+            test_ok = bool(test_text.strip())
+        except Exception:
+            logger.exception("LLM status probe failed")
+        web_search = "on" if settings.openrouter_enable_web_search else "off"
+        strict_mode = "on" if settings.strict_llm_only else "off"
+        return (
+            "Status:\n"
+            f"- match_provider: {settings.match_provider}\n"
+            f"- llm_provider: {provider}\n"
+            f"- model: {model}\n"
+            f"- openrouter_web_search: {web_search}\n"
+            f"- strict_llm_only: {strict_mode}\n"
+            f"- llm_probe: {'ok' if test_ok else 'failed'}"
+        )
 
     async def edit_draft(prediction_id: int, new_text: str) -> str:
         async with session_factory() as session:
@@ -232,6 +267,7 @@ async def build_app() -> tuple[Dispatcher, AsyncIOScheduler, Bot]:
         dp,
         admin_ids,
         queue_getter,
+        status_getter,
         stats_getter,
         force_generate,
         send_to_moderation,
@@ -246,16 +282,17 @@ async def build_app() -> tuple[Dispatcher, AsyncIOScheduler, Bot]:
     register_callbacks(dp, approve_publish, reject_prediction, admin_ids)
 
     async def scheduled_generate() -> None:
-        nonlocal custom_generation_prompt
         async with session_factory() as session:
-            from app.db.repositories import MatchRepository, PredictionRepository
+            from app.db.repositories import MatchRepository, PredictionRepository, SettingsRepository
 
+            settings_repo = SettingsRepository(session)
             service = PredictionGeneratorService(
                 match_provider=build_match_provider(),
                 llm_provider=build_llm_provider(),
                 match_repo=MatchRepository(session),
                 prediction_repo=PredictionRepository(session),
-                custom_prompt=custom_generation_prompt,
+                custom_prompt=await settings_repo.get(prompt_key),
+                strict_llm_only=settings.strict_llm_only,
             )
             await service.generate_daily_drafts(1)
             await session.commit()

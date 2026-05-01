@@ -20,12 +20,14 @@ class PredictionGeneratorService:
         match_repo: MatchRepository,
         prediction_repo: PredictionRepository,
         custom_prompt: str | None = None,
+        strict_llm_only: bool = False,
     ) -> None:
         self.match_provider = match_provider
         self.llm_provider = llm_provider
         self.match_repo = match_repo
         self.prediction_repo = prediction_repo
         self.custom_prompt = custom_prompt
+        self.strict_llm_only = strict_llm_only
 
     async def generate_daily_drafts(self, max_drafts_per_day: int, force: bool = False) -> list[int]:
         already = await self.prediction_repo.count_created_today(datetime.now(timezone.utc))
@@ -89,6 +91,8 @@ class PredictionGeneratorService:
         )
         llm_text = await self.llm_provider.generate(prompt)
         if not llm_text.strip():
+            if self.strict_llm_only:
+                raise RuntimeError("LLM returned empty response in strict mode.")
             outcome_label = {
                 MatchOutcome.HOME_WIN: "П1",
                 MatchOutcome.DRAW: "X",

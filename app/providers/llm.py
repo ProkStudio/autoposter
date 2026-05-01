@@ -49,11 +49,15 @@ class OpenRouterProvider:
         api_key: str | None,
         primary_model: str,
         fallback_model: str | None = None,
+        enable_web_search: bool = False,
     ) -> None:
         self.api_key = api_key
         self.primary_model = primary_model
         self.fallback_model = fallback_model
+        self.enable_web_search = enable_web_search
         self.url = "https://openrouter.ai/api/v1/chat/completions"
+        self.last_error: str | None = None
+        self.last_model_used: str | None = None
 
     async def generate(self, prompt: str) -> str:
         if not self.api_key:
@@ -78,9 +82,18 @@ class OpenRouterProvider:
                 ],
                 "temperature": 0.8,
             }
+            if self.enable_web_search:
+                payload["plugins"] = [{"id": "web"}]
             try:
                 async with httpx.AsyncClient(timeout=30) as client:
                     response = await client.post(self.url, headers=headers, json=payload)
+                    if response.status_code >= 400 and self.enable_web_search:
+                        # Some models/providers reject plugin options; retry plain request.
+                        fallback_payload = dict(payload)
+                        fallback_payload.pop("plugins", None)
+                        response = await client.post(
+                            self.url, headers=headers, json=fallback_payload
+                        )
                     response.raise_for_status()
                     data = response.json()
                 text = (
@@ -90,8 +103,11 @@ class OpenRouterProvider:
                     .strip()
                 )
                 if text:
+                    self.last_error = None
+                    self.last_model_used = model
                     return text
             except Exception:
                 logger.exception("OpenRouter request failed for model=%s", model)
+                self.last_error = f"model={model}: request failed"
                 continue
         return ""

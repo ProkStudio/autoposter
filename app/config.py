@@ -36,10 +36,14 @@ class Settings(BaseSettings):
         default="meta-llama/llama-3.1-8b-instruct:free",
         alias="OPENROUTER_FALLBACK_MODEL",
     )
+    openrouter_enable_web_search: bool = Field(
+        default=False, alias="OPENROUTER_ENABLE_WEB_SEARCH"
+    )
     match_provider: Literal["mock", "openligadb"] = Field(
         default="openligadb", alias="MATCH_PROVIDER"
     )
     openligadb_leagues_raw: str = Field(default="bl1,bl2,bl3", alias="OPENLIGADB_LEAGUES")
+    strict_llm_only: bool = Field(default=False, alias="STRICT_LLM_ONLY")
 
     post_fixed_times_raw: str = Field(alias="POST_FIXED_TIMES")
     prematch_window_hours_raw: str = Field(alias="PREMATCH_WINDOW_HOURS")

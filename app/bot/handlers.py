@@ -30,15 +30,11 @@ async def help_cmd(message: Message) -> None:
     )
 
 
-@router.message(Command("status"))
-async def status(message: Message) -> None:
-    await message.answer("OK")
-
-
 def register_dynamic_handlers(
     dp: Dispatcher,
     admin_ids: set[int],
     queue_getter: Callable[[], Awaitable[list]],
+    status_getter: Callable[[], Awaitable[str]],
     stats_getter: Callable[[int], Awaitable[dict[str, int]]],
     force_generate: Callable[[], Awaitable[int]],
     send_to_moderation: Callable[[], Awaitable[int]],
@@ -74,6 +70,13 @@ def register_dynamic_handlers(
         lines = [f"#{item.id} status={item.status.value}" for item in queue]
         await message.answer("\n".join(lines))
 
+    @dp.message(Command("status"))
+    async def status_cmd(message: Message) -> None:
+        if not admin_only(admin_ids, message.from_user.id):
+            await message.answer("Forbidden")
+            return
+        await message.answer(await status_getter())
+
     @dp.message(Command("stats"))
     async def stats_cmd(message: Message) -> None:
         if not admin_only(admin_ids, message.from_user.id):
@@ -87,8 +90,11 @@ def register_dynamic_handlers(
         if not admin_only(admin_ids, message.from_user.id):
             await message.answer("Forbidden")
             return
-        generated = await force_generate()
-        await message.answer(f"Generated drafts: {generated}")
+        try:
+            generated = await force_generate()
+            await message.answer(f"Generated drafts: {generated}")
+        except Exception as exc:
+            await message.answer(f"Generation failed: {exc}")
 
     @dp.message(Command("menu"))
     async def menu_cmd(message: Message) -> None:
@@ -218,8 +224,11 @@ def register_dynamic_handlers(
             lines = [f"#{item.id} status={item.status.value}" for item in queue]
             await message.answer("\n".join(lines))
         elif text == "⚡ Сгенерировать":
-            generated = await force_generate()
-            await message.answer(f"Generated drafts: {generated}")
+            try:
+                generated = await force_generate()
+                await message.answer(f"Generated drafts: {generated}")
+            except Exception as exc:
+                await message.answer(f"Generation failed: {exc}")
         elif text == "🛂 В модерацию":
             sent = await send_to_moderation()
             await message.answer(f"Sent to moderation: {sent}")
