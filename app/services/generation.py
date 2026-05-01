@@ -68,23 +68,44 @@ class PredictionGeneratorService:
         total_direction = choice(["over", "under"])
         confidence = randint(55, 78)
 
-        prompt = (
+        base_instruction = (
             self.custom_prompt.strip()
             if self.custom_prompt and self.custom_prompt.strip()
             else (
                 "Составь пост на русском о футбольном матче в стиле спортивного аналитика. "
                 "Структура: громкий заголовок, матч, прогноз (исход + тотал), короткий разбор, "
-                "уверенность в процентах. Без дисклеймера. "
-                f"Матч: {match.home_team} vs {match.away_team}, турнир: {match.league}."
+                "уверенность в процентах. Без дисклеймера."
             )
+        )
+        # Always pass concrete match context even with a custom prompt.
+        prompt = (
+            f"{base_instruction}\n\n"
+            "Обязательные данные матча (используй их буквально):\n"
+            f"- Home team: {match.home_team}\n"
+            f"- Away team: {match.away_team}\n"
+            f"- League: {match.league}\n"
+            f"- Kickoff (UTC): {match.starts_at.isoformat()}\n"
         )
         llm_text = await self.llm_provider.generate(prompt)
         if not llm_text.strip():
+            outcome_label = {
+                MatchOutcome.HOME_WIN: "П1",
+                MatchOutcome.DRAW: "X",
+                MatchOutcome.AWAY_WIN: "П2",
+            }[outcome]
+            total_label = "ТБ" if total_direction == "over" else "ТМ"
             llm_text = (
-                f"🔥 Центральный матч дня: {match.home_team} - {match.away_team}\n\n"
-                f"Прогноз: {outcome.value}, тотал {total_direction} {total_line}\n"
-                "Почему: по текущей форме и темпу игры есть перевес по выбранному сценарию.\n"
-                f"Уверенность: {confidence}%"
+                f"🔥 {match.home_team} — {match.away_team}\n"
+                f"🏆 {match.league}\n\n"
+                "Разбор без воды:\n"
+                f"- {match.home_team} дома играет агрессивнее и чаще доводит атаки до удара.\n"
+                f"- {match.away_team} регулярно оставляет зоны между линиями при высоком темпе.\n"
+                "- Матч выглядит как игра с моментами, а не закрытый шахматный сценарий.\n\n"
+                "✅ Ставка на матч:\n"
+                f"- Основная: {outcome_label}\n"
+                f"- Дополнительно: {total_label} {total_line}\n\n"
+                f"📊 Уверенность: {confidence}%\n"
+                "Забираем по линии до просадки коэффициента."
             )
 
         return PredictionDraft(

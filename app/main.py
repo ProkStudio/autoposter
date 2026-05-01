@@ -13,7 +13,7 @@ from app.config import Settings
 from app.db.session import build_engine, build_session_factory
 from app.logging import setup_logging
 from app.domain.enums import PredictionStatus
-from app.providers.llm import GeminiProvider
+from app.providers.llm import GeminiProvider, LLMProvider, OpenRouterProvider
 from app.providers.matches import MockMatchProvider
 from app.services.generation import PredictionGeneratorService
 from app.services.moderation import ModerationService
@@ -35,6 +35,15 @@ async def build_app() -> tuple[Dispatcher, AsyncIOScheduler, Bot]:
     session_factory = build_session_factory(engine)
     custom_generation_prompt: str | None = None
 
+    def build_llm_provider() -> LLMProvider:
+        if settings.enable_openrouter_fallback and settings.openrouter_api_key:
+            return OpenRouterProvider(
+                api_key=settings.openrouter_api_key,
+                primary_model=settings.openrouter_model,
+                fallback_model=settings.openrouter_fallback_model,
+            )
+        return GeminiProvider(settings)
+
     async def force_generate() -> int:
         nonlocal custom_generation_prompt
         async with session_factory() as session:
@@ -42,12 +51,12 @@ async def build_app() -> tuple[Dispatcher, AsyncIOScheduler, Bot]:
 
             service = PredictionGeneratorService(
                 match_provider=MockMatchProvider(),
-                llm_provider=GeminiProvider(settings),
+                llm_provider=build_llm_provider(),
                 match_repo=MatchRepository(session),
                 prediction_repo=PredictionRepository(session),
                 custom_prompt=custom_generation_prompt,
             )
-            generated = await service.generate_daily_drafts(settings.max_drafts_per_day, force=True)
+            generated = await service.generate_daily_drafts(1, force=True)
             await session.commit()
             return len(generated)
 
@@ -169,7 +178,7 @@ async def build_app() -> tuple[Dispatcher, AsyncIOScheduler, Bot]:
                 moderation_chat_id=settings.telegram_moderation_chat_id,
                 admin_ids=admin_ids,
             )
-            drafts = await repo.get_by_status(PredictionStatus.DRAFT, limit=3)
+            drafts = await repo.get_by_status(PredictionStatus.DRAFT, limit=1)
             sent = 0
             for draft in drafts:
                 message_id = await moderation_service.send_to_moderation(draft.id, draft.full_text)
@@ -238,12 +247,12 @@ async def build_app() -> tuple[Dispatcher, AsyncIOScheduler, Bot]:
 
             service = PredictionGeneratorService(
                 match_provider=MockMatchProvider(),
-                llm_provider=GeminiProvider(settings),
+                llm_provider=build_llm_provider(),
                 match_repo=MatchRepository(session),
                 prediction_repo=PredictionRepository(session),
                 custom_prompt=custom_generation_prompt,
             )
-            await service.generate_daily_drafts(settings.max_drafts_per_day)
+            await service.generate_daily_drafts(1)
             await session.commit()
 
     async def scheduled_cleanup() -> None:

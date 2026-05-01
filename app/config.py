@@ -29,11 +29,18 @@ class Settings(BaseSettings):
         default=False, alias="ENABLE_OPENROUTER_FALLBACK"
     )
     openrouter_api_key: str | None = Field(default=None, alias="OPENROUTER_API_KEY")
+    openrouter_model: str = Field(
+        default="deepseek/deepseek-chat-v3-0324:free", alias="OPENROUTER_MODEL"
+    )
+    openrouter_fallback_model: str = Field(
+        default="meta-llama/llama-3.1-8b-instruct:free",
+        alias="OPENROUTER_FALLBACK_MODEL",
+    )
 
     post_fixed_times_raw: str = Field(alias="POST_FIXED_TIMES")
     prematch_window_hours_raw: str = Field(alias="PREMATCH_WINDOW_HOURS")
     max_drafts_per_day: int = Field(default=3, alias="MAX_DRAFTS_PER_DAY")
-    llm_provider: Literal["gemini"] = "gemini"
+    llm_provider: Literal["gemini", "openrouter"] = "gemini"
 
     @field_validator("telegram_moderation_chat_id", mode="before")
     @classmethod
