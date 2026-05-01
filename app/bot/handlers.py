@@ -25,8 +25,11 @@ async def help_cmd(message: Message) -> None:
     await message.answer(
         "/status - health\n"
         "/queue - moderation queue\n"
+        "/drafts - preview drafts\n"
         "/stats - hit/miss for 7/30/90 days\n"
-        "/force_generate - manually run generation"
+        "/force_generate - manually run generation\n"
+        "/set_prompt <text> - set custom generation prompt\n"
+        "/show_prompt - show current prompt"
     )
 
 
@@ -44,7 +47,12 @@ def register_dynamic_handlers(
     send_to_moderation: Callable[[], Awaitable[int]],
     publish_now: Callable[[], Awaitable[str]],
     overview_getter: Callable[[], Awaitable[dict[str, int]]],
+    drafts_getter: Callable[[], Awaitable[list]],
+    set_prompt: Callable[[str | None], Awaitable[str]],
+    get_prompt: Callable[[], Awaitable[str]],
 ) -> None:
+    prompt_input_users: set[int] = set()
+
     async def show_admin_menu(message: Message) -> None:
         await message.answer("Админ-меню готово.", reply_markup=admin_menu_keyboard())
 
@@ -96,6 +104,48 @@ def register_dynamic_handlers(
             await message.answer("Forbidden")
             return
         await message.answer(await publish_now())
+
+    @dp.message(Command("drafts"))
+    async def drafts_cmd(message: Message) -> None:
+        if not admin_only(admin_ids, message.from_user.id):
+            await message.answer("Forbidden")
+            return
+        drafts = await drafts_getter()
+        if not drafts:
+            await message.answer("Черновиков пока нет.")
+            return
+        for item in drafts[:10]:
+            await message.answer(
+                f"#{item.id} | {item.status.value}\n\n{item.full_text}"
+            )
+
+    @dp.message(Command("set_prompt"))
+    async def set_prompt_cmd(message: Message) -> None:
+        if not admin_only(admin_ids, message.from_user.id):
+            await message.answer("Forbidden")
+            return
+        raw = (message.text or "").strip()
+        parts = raw.split(maxsplit=1)
+        if len(parts) == 1:
+            await message.answer(
+                "Отправь: /set_prompt <текст промпта>\n"
+                "или /set_prompt reset"
+            )
+            return
+        value = parts[1].strip()
+        if value.lower() == "reset":
+            result = await set_prompt(None)
+            await message.answer(result)
+            return
+        result = await set_prompt(value)
+        await message.answer(result)
+
+    @dp.message(Command("show_prompt"))
+    async def show_prompt_cmd(message: Message) -> None:
+        if not admin_only(admin_ids, message.from_user.id):
+            await message.answer("Forbidden")
+            return
+        await message.answer(await get_prompt())
 
     @dp.message(Command("overview"))
     async def overview_cmd(message: Message) -> None:
@@ -151,3 +201,23 @@ def register_dynamic_handlers(
         elif text == "📈 Статистика":
             s7, s30, s90 = await stats_getter(7), await stats_getter(30), await stats_getter(90)
             await message.answer(f"7d={s7}\n30d={s30}\n90d={s90}")
+        elif text == "🧾 Черновики":
+            drafts = await drafts_getter()
+            if not drafts:
+                await message.answer("Черновиков пока нет.")
+                return
+            for item in drafts[:10]:
+                await message.answer(f"#{item.id} | {item.status.value}\n\n{item.full_text}")
+        elif text == "📝 Промпт":
+            prompt_input_users.add(message.from_user.id)
+            await message.answer(
+                "Пришли новый промпт для генерации.\n"
+                "Отправь reset чтобы вернуть дефолт."
+            )
+        elif message.from_user.id in prompt_input_users:
+            value = text
+            prompt_input_users.discard(message.from_user.id)
+            if value.lower() == "reset":
+                await message.answer(await set_prompt(None))
+            else:
+                await message.answer(await set_prompt(value))

@@ -20,6 +20,7 @@ def admin_menu_keyboard() -> ReplyKeyboardMarkup:
         keyboard=[
             [KeyboardButton(text="📊 Сводка"), KeyboardButton(text="🗂 Очередь")],
             [KeyboardButton(text="⚡ Сгенерировать"), KeyboardButton(text="🛂 В модерацию")],
+            [KeyboardButton(text="🧾 Черновики"), KeyboardButton(text="📝 Промпт")],
             [KeyboardButton(text="🚀 Опубликовать сейчас"), KeyboardButton(text="📈 Статистика")],
         ],
         resize_keyboard=True,

@@ -19,11 +19,13 @@ class PredictionGeneratorService:
         llm_provider: LLMProvider,
         match_repo: MatchRepository,
         prediction_repo: PredictionRepository,
+        custom_prompt: str | None = None,
     ) -> None:
         self.match_provider = match_provider
         self.llm_provider = llm_provider
         self.match_repo = match_repo
         self.prediction_repo = prediction_repo
+        self.custom_prompt = custom_prompt
 
     async def generate_daily_drafts(self, max_drafts_per_day: int) -> list[int]:
         already = await self.prediction_repo.count_created_today(datetime.now(timezone.utc))
@@ -66,18 +68,22 @@ class PredictionGeneratorService:
         confidence = randint(55, 78)
 
         prompt = (
-            "Generate a concise football prediction in Russian with sections: "
-            "match, prediction (outcome + total), rationale, confidence, disclaimer. "
-            f"Match: {match.home_team} vs {match.away_team}, {match.league}"
+            self.custom_prompt.strip()
+            if self.custom_prompt and self.custom_prompt.strip()
+            else (
+                "Составь пост на русском о футбольном матче в стиле спортивного аналитика. "
+                "Структура: громкий заголовок, матч, прогноз (исход + тотал), короткий разбор, "
+                "уверенность в процентах. Без дисклеймера. "
+                f"Матч: {match.home_team} vs {match.away_team}, турнир: {match.league}."
+            )
         )
         llm_text = await self.llm_provider.generate(prompt)
         if not llm_text.strip():
             llm_text = (
-                f"Матч: {match.home_team} - {match.away_team}\n"
-                f"Прогноз: {outcome.value}, total {total_direction} {total_line}\n"
-                "Обоснование: команды показывают близкий уровень формы.\n"
-                f"Уверенность: {confidence}%\n"
-                "Дисклеймер: прогноз не является финансовой рекомендацией."
+                f"🔥 Центральный матч дня: {match.home_team} - {match.away_team}\n\n"
+                f"Прогноз: {outcome.value}, тотал {total_direction} {total_line}\n"
+                "Почему: по текущей форме и темпу игры есть перевес по выбранному сценарию.\n"
+                f"Уверенность: {confidence}%"
             )
 
         return PredictionDraft(

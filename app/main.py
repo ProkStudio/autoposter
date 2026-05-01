@@ -33,8 +33,10 @@ async def build_app() -> tuple[Dispatcher, AsyncIOScheduler, Bot]:
 
     engine = build_engine(settings)
     session_factory = build_session_factory(engine)
+    custom_generation_prompt: str | None = None
 
     async def force_generate() -> int:
+        nonlocal custom_generation_prompt
         async with session_factory() as session:
             from app.db.repositories import MatchRepository, PredictionRepository
 
@@ -43,6 +45,7 @@ async def build_app() -> tuple[Dispatcher, AsyncIOScheduler, Bot]:
                 llm_provider=GeminiProvider(settings),
                 match_repo=MatchRepository(session),
                 prediction_repo=PredictionRepository(session),
+                custom_prompt=custom_generation_prompt,
             )
             generated = await service.generate_daily_drafts(settings.max_drafts_per_day)
             await session.commit()
@@ -73,6 +76,28 @@ async def build_app() -> tuple[Dispatcher, AsyncIOScheduler, Bot]:
                 "in_moderation": len(await repo.get_by_status(PredictionStatus.SENT_TO_MODERATION)),
                 "drafts": len(await repo.get_by_status(PredictionStatus.DRAFT)),
             }
+
+    async def drafts_getter() -> list:
+        async with session_factory() as session:
+            from app.db.repositories import PredictionRepository
+
+            repo = PredictionRepository(session)
+            drafts = await repo.get_by_status(PredictionStatus.DRAFT, limit=10)
+            in_moderation = await repo.get_by_status(PredictionStatus.SENT_TO_MODERATION, limit=10)
+            approved = await repo.get_by_status(PredictionStatus.APPROVED, limit=10)
+            return drafts + in_moderation + approved
+
+    async def set_prompt(value: str | None) -> str:
+        nonlocal custom_generation_prompt
+        custom_generation_prompt = value.strip() if value and value.strip() else None
+        if custom_generation_prompt is None:
+            return "Промпт сброшен на стандартный."
+        return "Кастомный промпт сохранен."
+
+    async def get_prompt() -> str:
+        if custom_generation_prompt:
+            return f"Текущий кастомный промпт:\n\n{custom_generation_prompt}"
+        return "Используется стандартный промпт."
 
     async def approve_publish(prediction_id: int) -> bool:
         async with session_factory() as session:
@@ -176,10 +201,14 @@ async def build_app() -> tuple[Dispatcher, AsyncIOScheduler, Bot]:
         send_to_moderation,
         publish_now,
         overview_getter,
+        drafts_getter,
+        set_prompt,
+        get_prompt,
     )
     register_callbacks(dp, approve_publish, reject_prediction, admin_ids)
 
     async def scheduled_generate() -> None:
+        nonlocal custom_generation_prompt
         async with session_factory() as session:
             from app.db.repositories import MatchRepository, PredictionRepository
 
@@ -188,6 +217,7 @@ async def build_app() -> tuple[Dispatcher, AsyncIOScheduler, Bot]:
                 llm_provider=GeminiProvider(settings),
                 match_repo=MatchRepository(session),
                 prediction_repo=PredictionRepository(session),
+                custom_prompt=custom_generation_prompt,
             )
             await service.generate_daily_drafts(settings.max_drafts_per_day)
             await session.commit()
