@@ -1,8 +1,12 @@
 from __future__ import annotations
 
+import logging
 from typing import Protocol
 
 import httpx
+
+logger = logging.getLogger(__name__)
+
 
 class LLMProvider(Protocol):
     async def generate(self, prompt: str) -> str:
@@ -22,10 +26,15 @@ class GeminiProvider:
             f"{self._model}:generateContent?key={self._api_key}"
         )
         payload = {"contents": [{"parts": [{"text": prompt}]}]}
-        async with httpx.AsyncClient(timeout=20) as client:
-            response = await client.post(url, json=payload)
-            response.raise_for_status()
-            data = response.json()
+        try:
+            async with httpx.AsyncClient(timeout=20) as client:
+                response = await client.post(url, json=payload)
+                response.raise_for_status()
+                data = response.json()
+        except Exception:
+            # Never fail update handling because of LLM provider issues.
+            logger.exception("Gemini request failed, using template fallback text")
+            return ""
         return (
             data.get("candidates", [{}])[0]
             .get("content", {})
