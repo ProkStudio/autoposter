@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 
 from aiogram import Bot, Dispatcher
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -17,6 +18,8 @@ from app.services.moderation import ModerationService
 from app.services.publication import PublicationService
 from app.services.retention import RetentionService
 from app.scheduler.jobs import setup_scheduler
+
+logger = logging.getLogger(__name__)
 
 
 async def build_app() -> tuple[Dispatcher, AsyncIOScheduler, Bot]:
@@ -125,8 +128,15 @@ async def build_app() -> tuple[Dispatcher, AsyncIOScheduler, Bot]:
 
 async def main() -> None:
     dp, scheduler, bot = await build_app()
+    logger.info("Starting scheduler and telegram polling")
+    # Ensure polling mode is not blocked by an existing webhook.
+    await bot.delete_webhook(drop_pending_updates=False)
     scheduler.start()
-    await dp.start_polling(bot)
+    try:
+        await dp.start_polling(bot)
+    except Exception:
+        logger.exception("Bot polling crashed")
+        raise
 
 
 if __name__ == "__main__":
