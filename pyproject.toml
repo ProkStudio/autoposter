@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "football-autopost-bot"
+version = "0.1.0"
+description = "Telegram bot for football prediction drafting and moderated posting"
+requires-python = ">=3.11"
+dependencies = [
+  "aiogram>=3.7.0",
+  "apscheduler>=3.10.4",
+  "sqlalchemy[asyncio]>=2.0.31",
+  "asyncpg>=0.29.0",
+  "alembic>=1.13.2",
+  "httpx>=0.27.0",
+  "pydantic-settings>=2.3.4",
+  "structlog>=24.2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.2.0",
+  "pytest-asyncio>=0.23.8",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+
+[tool.setuptools.packages.find]
+include = ["app*"]

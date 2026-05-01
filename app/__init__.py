@@ -1,0 +1,1 @@
+"""football-autopost-bot package."""
