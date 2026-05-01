@@ -86,6 +86,34 @@ class PredictionRepository:
         )
         return list(result)
 
+    async def get_by_status(
+        self, status: PredictionStatus, limit: int = 20
+    ) -> list[PredictionModel]:
+        result = await self.session.scalars(
+            select(PredictionModel)
+            .where(PredictionModel.status == status)
+            .order_by(PredictionModel.created_at.asc())
+            .limit(limit)
+        )
+        return list(result)
+
+    async def get_latest_unpublished(
+        self, statuses: list[PredictionStatus]
+    ) -> PredictionModel | None:
+        if not statuses:
+            return None
+        return await self.session.scalar(
+            select(PredictionModel)
+            .where(
+                and_(
+                    PredictionModel.status.in_(statuses),
+                    PredictionModel.channel_message_id.is_(None),
+                )
+            )
+            .order_by(PredictionModel.created_at.desc())
+            .limit(1)
+        )
+
     async def get_by_id(self, prediction_id: int) -> PredictionModel | None:
         return await self.session.get(PredictionModel, prediction_id)
 
@@ -121,6 +149,30 @@ class PredictionRepository:
             else:
                 out["pending"] = count
         return out
+
+    async def published_total(self) -> int:
+        return int(
+            await self.session.scalar(
+                select(func.count(PredictionModel.id)).where(
+                    PredictionModel.status == PredictionStatus.PUBLISHED
+                )
+            )
+            or 0
+        )
+
+    async def published_since(self, since: datetime) -> int:
+        return int(
+            await self.session.scalar(
+                select(func.count(PredictionModel.id)).where(
+                    and_(
+                        PredictionModel.status == PredictionStatus.PUBLISHED,
+                        PredictionModel.published_at.is_not(None),
+                        PredictionModel.published_at >= since,
+                    )
+                )
+            )
+            or 0
+        )
 
     async def cleanup_older_than(self, days: int) -> int:
         cutoff = datetime.utcnow() - timedelta(days=days)
