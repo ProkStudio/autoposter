@@ -15,11 +15,6 @@ def admin_only(admin_ids: set[int], user_id: int) -> bool:
     return user_id in admin_ids
 
 
-@router.message(Command("start"))
-async def start(message: Message) -> None:
-    await message.answer("Football autopost bot is running.")
-
-
 @router.message(Command("help"))
 async def help_cmd(message: Message) -> None:
     await message.answer(

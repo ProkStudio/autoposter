@@ -45,7 +45,8 @@ class PredictionGeneratorService:
                 away_team=match.away_team,
                 starts_at=match.starts_at,
             )
-            if await self.prediction_repo.exists_for_match(db_match.id):
+            # Allow manual force generation even if a prediction already exists for the match.
+            if (not force) and await self.prediction_repo.exists_for_match(db_match.id):
                 continue
             draft = await self.generate_text(match)
             prediction = await self.prediction_repo.create_draft(
