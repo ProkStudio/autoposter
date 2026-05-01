@@ -27,13 +27,14 @@ class PredictionGeneratorService:
         self.prediction_repo = prediction_repo
         self.custom_prompt = custom_prompt
 
-    async def generate_daily_drafts(self, max_drafts_per_day: int) -> list[int]:
+    async def generate_daily_drafts(self, max_drafts_per_day: int, force: bool = False) -> list[int]:
         already = await self.prediction_repo.count_created_today(datetime.now(timezone.utc))
-        if already >= max_drafts_per_day:
+        if not force and already >= max_drafts_per_day:
             return []
 
         matches = await self.match_provider.get_upcoming_matches()
-        selected = self._select_matches(matches)[: max_drafts_per_day - already]
+        available_slots = max_drafts_per_day if force else max_drafts_per_day - already
+        selected = self._select_matches(matches)[:available_slots]
 
         created_ids: list[int] = []
         for match in selected:

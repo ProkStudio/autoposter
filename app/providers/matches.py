@@ -14,11 +14,12 @@ class MatchProvider(Protocol):
 class MockMatchProvider:
     async def get_upcoming_matches(self) -> list[Match]:
         now = datetime.now(timezone.utc)
+        batch_id = int(now.timestamp())
         matches: list[Match] = []
         for idx in range(1, 11):
             matches.append(
                 Match(
-                    provider_match_id=f"mock-{idx}",
+                    provider_match_id=f"mock-{batch_id}-{idx}",
                     league="Mock Premier League",
                     home_team=f"Team {idx}A",
                     away_team=f"Team {idx}B",

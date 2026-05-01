@@ -26,6 +26,8 @@ async def help_cmd(message: Message) -> None:
         "/status - health\n"
         "/queue - moderation queue\n"
         "/drafts - preview drafts\n"
+        "/draft_edit <id> <new text> - edit draft\n"
+        "/draft_delete <id> - delete draft\n"
         "/stats - hit/miss for 7/30/90 days\n"
         "/force_generate - manually run generation\n"
         "/set_prompt <text> - set custom generation prompt\n"
@@ -50,6 +52,8 @@ def register_dynamic_handlers(
     drafts_getter: Callable[[], Awaitable[list]],
     set_prompt: Callable[[str | None], Awaitable[str]],
     get_prompt: Callable[[], Awaitable[str]],
+    edit_draft: Callable[[int, str], Awaitable[str]],
+    delete_draft: Callable[[int], Awaitable[str]],
 ) -> None:
     prompt_input_users: set[int] = set()
 
@@ -118,6 +122,34 @@ def register_dynamic_handlers(
             await message.answer(
                 f"#{item.id} | {item.status.value}\n\n{item.full_text}"
             )
+
+    @dp.message(Command("draft_edit"))
+    async def draft_edit_cmd(message: Message) -> None:
+        if not admin_only(admin_ids, message.from_user.id):
+            await message.answer("Forbidden")
+            return
+        parts = (message.text or "").split(maxsplit=2)
+        if len(parts) < 3 or not parts[1].isdigit():
+            await message.answer("Usage: /draft_edit <id> <new text>")
+            return
+        prediction_id = int(parts[1])
+        new_text = parts[2].strip()
+        if not new_text:
+            await message.answer("New text cannot be empty.")
+            return
+        await message.answer(await edit_draft(prediction_id, new_text))
+
+    @dp.message(Command("draft_delete"))
+    async def draft_delete_cmd(message: Message) -> None:
+        if not admin_only(admin_ids, message.from_user.id):
+            await message.answer("Forbidden")
+            return
+        parts = (message.text or "").split(maxsplit=1)
+        if len(parts) < 2 or not parts[1].strip().isdigit():
+            await message.answer("Usage: /draft_delete <id>")
+            return
+        prediction_id = int(parts[1].strip())
+        await message.answer(await delete_draft(prediction_id))
 
     @dp.message(Command("set_prompt"))
     async def set_prompt_cmd(message: Message) -> None:
@@ -214,6 +246,10 @@ def register_dynamic_handlers(
                 "Пришли новый промпт для генерации.\n"
                 "Отправь reset чтобы вернуть дефолт."
             )
+        elif text == "✏️ Ред. черновик":
+            await message.answer("Используй: /draft_edit <id> <новый текст>")
+        elif text == "🗑 Удалить черновик":
+            await message.answer("Используй: /draft_delete <id>")
         elif message.from_user.id in prompt_input_users:
             value = text
             prompt_input_users.discard(message.from_user.id)

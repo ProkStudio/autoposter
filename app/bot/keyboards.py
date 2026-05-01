@@ -21,6 +21,7 @@ def admin_menu_keyboard() -> ReplyKeyboardMarkup:
             [KeyboardButton(text="📊 Сводка"), KeyboardButton(text="🗂 Очередь")],
             [KeyboardButton(text="⚡ Сгенерировать"), KeyboardButton(text="🛂 В модерацию")],
             [KeyboardButton(text="🧾 Черновики"), KeyboardButton(text="📝 Промпт")],
+            [KeyboardButton(text="✏️ Ред. черновик"), KeyboardButton(text="🗑 Удалить черновик")],
             [KeyboardButton(text="🚀 Опубликовать сейчас"), KeyboardButton(text="📈 Статистика")],
         ],
         resize_keyboard=True,

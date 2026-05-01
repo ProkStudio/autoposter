@@ -133,6 +133,37 @@ class PredictionRepository:
             )
         )
 
+    async def update_full_text(self, prediction_id: int, full_text: str) -> bool:
+        result = await self.session.execute(
+            update(PredictionModel)
+            .where(
+                and_(
+                    PredictionModel.id == prediction_id,
+                    PredictionModel.status.in_(
+                        [
+                            PredictionStatus.DRAFT,
+                            PredictionStatus.SENT_TO_MODERATION,
+                            PredictionStatus.APPROVED,
+                            PredictionStatus.REJECTED,
+                        ]
+                    ),
+                )
+            )
+            .values(full_text=full_text)
+        )
+        return int(result.rowcount or 0) > 0
+
+    async def delete_prediction(self, prediction_id: int) -> bool:
+        result = await self.session.execute(
+            delete(PredictionModel).where(
+                and_(
+                    PredictionModel.id == prediction_id,
+                    PredictionModel.status != PredictionStatus.PUBLISHED,
+                )
+            )
+        )
+        return int(result.rowcount or 0) > 0
+
     async def stats(self, days: int) -> dict[str, int]:
         since = datetime.utcnow() - timedelta(days=days)
         rows = await self.session.execute(

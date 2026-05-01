@@ -47,7 +47,7 @@ async def build_app() -> tuple[Dispatcher, AsyncIOScheduler, Bot]:
                 prediction_repo=PredictionRepository(session),
                 custom_prompt=custom_generation_prompt,
             )
-            generated = await service.generate_daily_drafts(settings.max_drafts_per_day)
+            generated = await service.generate_daily_drafts(settings.max_drafts_per_day, force=True)
             await session.commit()
             return len(generated)
 
@@ -98,6 +98,28 @@ async def build_app() -> tuple[Dispatcher, AsyncIOScheduler, Bot]:
         if custom_generation_prompt:
             return f"Текущий кастомный промпт:\n\n{custom_generation_prompt}"
         return "Используется стандартный промпт."
+
+    async def edit_draft(prediction_id: int, new_text: str) -> str:
+        async with session_factory() as session:
+            from app.db.repositories import PredictionRepository
+
+            repo = PredictionRepository(session)
+            ok = await repo.update_full_text(prediction_id, new_text)
+            await session.commit()
+            if not ok:
+                return "Нельзя изменить: не найдено или уже опубликовано."
+            return f"Черновик #{prediction_id} обновлен."
+
+    async def delete_draft(prediction_id: int) -> str:
+        async with session_factory() as session:
+            from app.db.repositories import PredictionRepository
+
+            repo = PredictionRepository(session)
+            ok = await repo.delete_prediction(prediction_id)
+            await session.commit()
+            if not ok:
+                return "Нельзя удалить: не найдено или уже опубликовано."
+            return f"Черновик #{prediction_id} удален."
 
     async def approve_publish(prediction_id: int) -> bool:
         async with session_factory() as session:
@@ -204,6 +226,8 @@ async def build_app() -> tuple[Dispatcher, AsyncIOScheduler, Bot]:
         drafts_getter,
         set_prompt,
         get_prompt,
+        edit_draft,
+        delete_draft,
     )
     register_callbacks(dp, approve_publish, reject_prediction, admin_ids)
 
