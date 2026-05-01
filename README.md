@@ -1,6 +1,3 @@
-<<<<<<< HEAD
-# autoposter
-=======
 # football-autopost-bot
 
 Production-ready MVP Telegram bot for football predictions with moderation flow before channel publishing.
@@ -110,4 +107,3 @@ Covered tests:
 - `/queue`
 - `/stats`
 - `/force_generate`
->>>>>>> 147fe0c (Initial commit: football autopost bot MVP)

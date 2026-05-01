@@ -14,7 +14,7 @@ class Settings(BaseSettings):
 
     telegram_bot_token: str = Field(alias="TELEGRAM_BOT_TOKEN")
     telegram_channel_id: int = Field(alias="TELEGRAM_CHANNEL_ID")
-    telegram_admin_ids: list[int] = Field(alias="TELEGRAM_ADMIN_IDS")
+    telegram_admin_ids_raw: str = Field(alias="TELEGRAM_ADMIN_IDS")
     telegram_moderation_chat_id: int | None = Field(
         default=None, alias="TELEGRAM_MODERATION_CHAT_ID"
     )
@@ -30,35 +30,10 @@ class Settings(BaseSettings):
     )
     openrouter_api_key: str | None = Field(default=None, alias="OPENROUTER_API_KEY")
 
-    post_fixed_times: list[time] = Field(alias="POST_FIXED_TIMES")
-    prematch_window_hours: list[int] = Field(alias="PREMATCH_WINDOW_HOURS")
+    post_fixed_times_raw: str = Field(alias="POST_FIXED_TIMES")
+    prematch_window_hours_raw: str = Field(alias="PREMATCH_WINDOW_HOURS")
     max_drafts_per_day: int = Field(default=3, alias="MAX_DRAFTS_PER_DAY")
     llm_provider: Literal["gemini"] = "gemini"
-
-    @field_validator("telegram_admin_ids", mode="before")
-    @classmethod
-    def parse_admin_ids(cls, value: str | list[int]) -> list[int]:
-        if isinstance(value, list):
-            return value
-        return [int(item.strip()) for item in value.split(",") if item.strip()]
-
-    @field_validator("post_fixed_times", mode="before")
-    @classmethod
-    def parse_times(cls, value: str | list[time]) -> list[time]:
-        if isinstance(value, list):
-            return value
-        parsed: list[time] = []
-        for item in value.split(","):
-            hours, minutes = item.strip().split(":")
-            parsed.append(time(hour=int(hours), minute=int(minutes)))
-        return parsed
-
-    @field_validator("prematch_window_hours", mode="before")
-    @classmethod
-    def parse_windows(cls, value: str | list[int]) -> list[int]:
-        if isinstance(value, list):
-            return value
-        return [int(item.strip()) for item in value.split(",") if item.strip()]
 
     @field_validator("telegram_moderation_chat_id", mode="before")
     @classmethod
@@ -71,3 +46,27 @@ class Settings(BaseSettings):
         if not value:
             return None
         return int(value)
+
+    @property
+    def telegram_admin_ids(self) -> list[int]:
+        return [
+            int(item.strip())
+            for item in self.telegram_admin_ids_raw.split(",")
+            if item.strip()
+        ]
+
+    @property
+    def post_fixed_times(self) -> list[time]:
+        parsed: list[time] = []
+        for item in self.post_fixed_times_raw.split(","):
+            hours, minutes = item.strip().split(":")
+            parsed.append(time(hour=int(hours), minute=int(minutes)))
+        return parsed
+
+    @property
+    def prematch_window_hours(self) -> list[int]:
+        return [
+            int(item.strip())
+            for item in self.prematch_window_hours_raw.split(",")
+            if item.strip()
+        ]
