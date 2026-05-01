@@ -36,6 +36,10 @@ class Settings(BaseSettings):
         default="meta-llama/llama-3.1-8b-instruct:free",
         alias="OPENROUTER_FALLBACK_MODEL",
     )
+    match_provider: Literal["mock", "openligadb"] = Field(
+        default="openligadb", alias="MATCH_PROVIDER"
+    )
+    openligadb_leagues_raw: str = Field(default="bl1,bl2,bl3", alias="OPENLIGADB_LEAGUES")
 
     post_fixed_times_raw: str = Field(alias="POST_FIXED_TIMES")
     prematch_window_hours_raw: str = Field(alias="PREMATCH_WINDOW_HOURS")
@@ -77,3 +81,7 @@ class Settings(BaseSettings):
             for item in self.prematch_window_hours_raw.split(",")
             if item.strip()
         ]
+
+    @property
+    def openligadb_leagues(self) -> list[str]:
+        return [item.strip() for item in self.openligadb_leagues_raw.split(",") if item.strip()]

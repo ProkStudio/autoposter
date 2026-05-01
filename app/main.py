@@ -14,7 +14,7 @@ from app.db.session import build_engine, build_session_factory
 from app.logging import setup_logging
 from app.domain.enums import PredictionStatus
 from app.providers.llm import GeminiProvider, LLMProvider, OpenRouterProvider
-from app.providers.matches import MockMatchProvider
+from app.providers.matches import MatchProvider, MockMatchProvider, OpenLigaDBMatchProvider
 from app.services.generation import PredictionGeneratorService
 from app.services.moderation import ModerationService
 from app.services.publication import PublicationService
@@ -44,13 +44,18 @@ async def build_app() -> tuple[Dispatcher, AsyncIOScheduler, Bot]:
             )
         return GeminiProvider(settings)
 
+    def build_match_provider() -> MatchProvider:
+        if settings.match_provider == "openligadb":
+            return OpenLigaDBMatchProvider(settings.openligadb_leagues)
+        return MockMatchProvider()
+
     async def force_generate() -> int:
         nonlocal custom_generation_prompt
         async with session_factory() as session:
             from app.db.repositories import MatchRepository, PredictionRepository
 
             service = PredictionGeneratorService(
-                match_provider=MockMatchProvider(),
+                match_provider=build_match_provider(),
                 llm_provider=build_llm_provider(),
                 match_repo=MatchRepository(session),
                 prediction_repo=PredictionRepository(session),
@@ -246,7 +251,7 @@ async def build_app() -> tuple[Dispatcher, AsyncIOScheduler, Bot]:
             from app.db.repositories import MatchRepository, PredictionRepository
 
             service = PredictionGeneratorService(
-                match_provider=MockMatchProvider(),
+                match_provider=build_match_provider(),
                 llm_provider=build_llm_provider(),
                 match_repo=MatchRepository(session),
                 prediction_repo=PredictionRepository(session),
